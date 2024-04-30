@@ -13,6 +13,7 @@ mod player;
 mod renderer;
 mod transform;
 mod window;
+mod world;
 
 use crate::{camera::Camera, window::Window};
 use anyhow::Result;
@@ -20,7 +21,7 @@ use assets::{Material, Mesh};
 use collider::{Collider, ColliderKind};
 use event::Event;
 use gather::Gatherable;
-use glam::{Vec3, Vec4};
+use glam::{Quat, Vec3, Vec4};
 use interact::Interactable;
 use net::Connection;
 use nyx::{
@@ -29,6 +30,7 @@ use nyx::{
 };
 use player::{Health, Player};
 use renderer::{RenderObject, Renderer};
+use world::{StaticMesh, WorldFileAsset, WorldFileAssetSpawn, WorldFileAssetType, WorldFileStaticMesh};
 use std::time::Duration;
 use tecs::{
     impl_archetype,
@@ -51,6 +53,14 @@ pub type World = tecs::World<Event>;
 fn main() -> Result<()> {
     pretty_env_logger::init();
 
+    let world_struct = world::WorldFile { version: 1, assets: Vec::from([
+        WorldFileAsset { id: 0, file_name: "copper_ore.glb".to_string(), asset_type: WorldFileAssetType::StaticMesh },
+    ]), world: Vec::from([
+        WorldFileAssetSpawn::StaticMesh(WorldFileStaticMesh { transform: Transform { translation: Vec3 { x: 2.0, y: 0.0, z: 0.0 }, rotation: Quat::IDENTITY, scale: Vec3::ONE }, asset_id: 0 }),
+        WorldFileAssetSpawn::StaticMesh(WorldFileStaticMesh { transform: Transform { translation: Vec3 { x: 4.0, y: 0.0, z: 0.0 }, rotation: Quat::IDENTITY, scale: Vec3::ONE }, asset_id: 0 }),
+        WorldFileAssetSpawn::StaticMesh(WorldFileStaticMesh { transform: Transform { translation: Vec3 { x: 7.0, y: 0.0, z: 0.0 }, rotation: Quat::IDENTITY, scale: Vec3::ONE }, asset_id: 0 }),
+    ]) };
+
     let window = Window::new();
 
     let renderer = Renderer::new(&window)?;
@@ -65,6 +75,7 @@ fn main() -> Result<()> {
     });
 
     let mut world = World::new()
+        .register::<StaticMesh>()
         .register::<Player>()
         .register::<CopperOre>()
         .with_resource(State::Running)
@@ -105,23 +116,25 @@ fn main() -> Result<()> {
         health: Health(100.0),
     });
 
-    world.spawn(CopperOre {
-        render: RenderObject {
-            mesh: copper_ore,
-            material: orange,
-        },
-        transform: Transform::IDENTITY,
-        gatherable: Gatherable {
-            collider: Collider {
-                kind: ColliderKind::Sphere(5.0),
-                position: Vec3::ZERO,
-            },
-            loot: 0,
-            timer: Timer::new(Duration::from_secs(1)),
-        },
-        interactable: Interactable::new(&world, "Gather Copper Ore"),
-        name: Name(String::from("Copper Ore")),
-    });
+    world::spawn_from_world_file_struct(&world, world_struct);
+
+    // world.spawn(CopperOre {
+    //     render: RenderObject {
+    //         mesh: copper_ore,
+    //         material: orange,
+    //     },
+    //     transform: Transform::IDENTITY,
+    //     gatherable: Gatherable {
+    //         collider: Collider {
+    //             kind: ColliderKind::Sphere(5.0),
+    //             position: Vec3::ZERO,
+    //         },
+    //         loot: 0,
+    //         timer: Timer::new(Duration::from_secs(1)),
+    //     },
+    //     interactable: Interactable::new(&world, "Gather Copper Ore"),
+    //     name: Name(String::from("Copper Ore")),
+    // });
 
     loop {
         if let State::Stopped = *world.get::<State>().unwrap() {

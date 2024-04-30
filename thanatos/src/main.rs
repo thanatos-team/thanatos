@@ -31,7 +31,7 @@ use nyx::{
 use player::{Health, Player};
 use renderer::{RenderObject, Renderer};
 use world::{StaticMesh, WorldFileAsset, WorldFileAssetSpawn, WorldFileAssetType, WorldFileStaticMesh};
-use std::time::Duration;
+use std::{fs, io::Write, path::PathBuf, time::Duration};
 use tecs::{
     impl_archetype,
     utils::{Clock, Name, State, Timer},
@@ -56,10 +56,13 @@ fn main() -> Result<()> {
     let world_struct = world::WorldFile { version: 1, assets: Vec::from([
         WorldFileAsset { id: 0, file_name: "copper_ore.glb".to_string(), asset_type: WorldFileAssetType::StaticMesh },
     ]), world: Vec::from([
-        WorldFileAssetSpawn::StaticMesh(WorldFileStaticMesh { transform: Transform { translation: Vec3 { x: 2.0, y: 0.0, z: 0.0 }, rotation: Quat::IDENTITY, scale: Vec3::ONE }, asset_id: 0 }),
+        WorldFileAssetSpawn::StaticMesh(WorldFileStaticMesh { transform: Transform { translation: Vec3 { x: 2.0, y: 0.0, z: 0.0 }, rotation: Quat::IDENTITY, scale: Vec3 { x: 2.0, y: 1.0, z: 1.0 } }, asset_id: 0 }),
         WorldFileAssetSpawn::StaticMesh(WorldFileStaticMesh { transform: Transform { translation: Vec3 { x: 4.0, y: 0.0, z: 0.0 }, rotation: Quat::IDENTITY, scale: Vec3::ONE }, asset_id: 0 }),
         WorldFileAssetSpawn::StaticMesh(WorldFileStaticMesh { transform: Transform { translation: Vec3 { x: 7.0, y: 0.0, z: 0.0 }, rotation: Quat::IDENTITY, scale: Vec3::ONE }, asset_id: 0 }),
     ]) };
+    world::save_debug_world_file(&world_struct);
+
+    let world_struct = world::read_world_from_file(PathBuf::from("./assets/worldfiles/world.json")).unwrap();
 
     let window = Window::new();
 

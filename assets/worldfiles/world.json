@@ -1,0 +1,81 @@
+{
+  "version": 1,
+  "assets": [
+    {
+      "id": 0,
+      "file_name": "copper_ore.glb",
+      "asset_type": "StaticMesh"
+    }
+  ],
+  "world": [
+    {
+      "StaticMesh": {
+        "transform": {
+          "translation": [
+            2.0,
+            0.0,
+            0.0
+          ],
+          "rotation": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "scale": [
+            2.0,
+            1.0,
+            1.0
+          ]
+        },
+        "asset_id": 0
+      }
+    },
+    {
+      "StaticMesh": {
+        "transform": {
+          "translation": [
+            4.0,
+            0.0,
+            0.0
+          ],
+          "rotation": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "asset_id": 0
+      }
+    },
+    {
+      "StaticMesh": {
+        "transform": {
+          "translation": [
+            7.0,
+            0.0,
+            0.0
+          ],
+          "rotation": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "asset_id": 0
+      }
+    }
+  ]
+}

@@ -1,31 +1,31 @@
 // world_file struct
-#[derive(Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct WorldFile {
     pub(crate) version: u32,
     pub(crate) assets: Vec<WorldFileAsset>,
     pub(crate) world: Vec<WorldFileAssetSpawn> 
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct WorldFileAsset {
     pub(crate) id: u32,
     pub(crate)file_name: String,
     pub(crate)asset_type: WorldFileAssetType
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug)]
 pub enum WorldFileAssetType {
     StaticMesh,
     Archetype,
 }
-#[derive(Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug)]
 pub enum WorldFileAssetSpawn {
     StaticMesh(WorldFileStaticMesh),
     Archetype { asset_id: u32 }, 
 }
 
 // static_mesh struct
-#[derive(Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct WorldFileStaticMesh {
     pub(crate) transform: Transform,
     pub(crate) asset_id: u32,
@@ -38,12 +38,12 @@ pub struct StaticMesh {
     pub transform: Transform,
 }
 
-use std::{collections::HashMap, fs::File, io::BufReader, path::Path};
+use std::{collections::HashMap, fs::File, io::{BufReader, Write}, path::{Path, PathBuf}};
 use glam::Vec4;
 use tecs::impl_archetype;
-use anyhow::Ok;
+use anyhow::{Ok, Result};
 use log::warn;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use thanatos_macros::Archetype;
 
 use crate::{assets::{self, Material, MeshId}, renderer::RenderObject, transform::Transform, World};
@@ -99,4 +99,25 @@ pub fn spawn_from_world_file_struct(game_world: &World, file: WorldFile) -> bool
     }
 
     return false;
+}
+
+pub fn save_world_file(world_struct: &WorldFile, path: Option<PathBuf>) -> Result<()> {
+    let world_json = serde_json::to_vec(world_struct).unwrap();
+    let mut file: File;
+    if path.is_some() {
+        file = std::fs::File::create(path.unwrap()).unwrap();
+    } else {
+        file = std::fs::File::create(std::path::PathBuf::from("./assets/worldfiles/world.json")).unwrap();
+    }
+    file.write_all(&world_json)?;
+    file.flush()?;
+    Ok(())
+}
+
+pub fn save_debug_world_file(world_struct: &WorldFile) -> Result<()> {
+    let world_json = serde_json::to_vec_pretty(world_struct).unwrap();
+    let mut file = std::fs::File::create(std::path::PathBuf::from("./assets/worldfiles/world.json")).unwrap();
+    file.write_all(&world_json)?;
+    file.flush()?;
+    Ok(())
 }

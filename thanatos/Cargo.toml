@@ -5,6 +5,9 @@ edition = "2024"
 
 [dependencies]
 anyhow = "1.0.97"
+bytemuck = { version = "1.22.0", features = ["derive"] }
+glam = { version = "0.30.0", features = ["bytemuck"] }
+gltf = { version = "0.1.0", path = "../gltf" }
 pollster = "0.4.0"
 wgpu = "24.0.1"
 winit = "0.30.9"

@@ -57,7 +57,7 @@ impl Mesh {
                 .collect(),
             info: MeshInfo {
                 transform: Mat4::IDENTITY,
-                colour
+                colour,
             },
         })
     }

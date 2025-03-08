@@ -8,7 +8,7 @@ use std::sync::Arc;
 
 use anyhow::Result;
 use bytemuck::{Pod, Zeroable};
-use glam::{Mat4, Vec3};
+use glam::{Mat4, Vec3, Vec4};
 use gltf::Glb;
 use mesh::{Mesh, MeshInfo, Vertex};
 use wgpu::util::{BufferInitDescriptor, DeviceExt};

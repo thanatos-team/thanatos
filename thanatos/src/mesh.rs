@@ -1,5 +1,5 @@
 use bytemuck::{Pod, Zeroable};
-use glam::{Mat4, Vec3};
+use glam::{Mat4, Vec3, Vec4};
 use gltf::{Glb, MeshPrimitive};
 
 #[repr(C)]
@@ -22,13 +22,14 @@ impl Vertex {
 #[derive(Clone, Copy, Pod, Zeroable, Default)]
 pub struct MeshInfo {
     pub transform: Mat4,
+    pub colour: Vec4,
 }
 
 #[derive(Clone, Default)]
 pub struct Mesh {
     pub vertices: Vec<Vertex>,
     pub indices: Vec<u32>,
-    pub info: MeshInfo
+    pub info: MeshInfo,
 }
 
 impl Mesh {
@@ -40,6 +41,13 @@ impl Mesh {
         let normals = primitive.get_attribute_data(glb, "NORMAL")?;
         let normals = bytemuck::cast_slice::<u8, Vec3>(&normals);
 
+        let colour = primitive
+            .material
+            .and_then(|index| glb.gltf.materials.get(index))
+            .and_then(|material| material.pbr.base_color_factor)
+            .map(Vec4::from_array)
+            .unwrap_or(Vec4::ONE);
+
         Some(Self {
             indices,
             vertices: positions
@@ -47,7 +55,10 @@ impl Mesh {
                 .zip(normals)
                 .map(|(position, normal)| Vertex::new(*position, *normal))
                 .collect(),
-            info: MeshInfo::default(),
+            info: MeshInfo {
+                transform: Mat4::IDENTITY,
+                colour
+            },
         })
     }
 

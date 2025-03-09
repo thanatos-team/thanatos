@@ -1,8 +1,10 @@
 #![warn(clippy::pedantic)]
 #![warn(clippy::perf)]
 
+mod camera;
 mod input;
 mod mesh;
+mod player;
 mod system;
 
 use std::any::type_name;
@@ -10,13 +12,16 @@ use std::borrow::Cow;
 use std::marker::PhantomData;
 use std::ops::{Bound, RangeBounds};
 use std::sync::{Arc, Mutex};
+use std::time::Instant;
 
 use anyhow::Result;
 use bytemuck::{Pod, Zeroable};
+use camera::Camera;
 use glam::{Mat4, Quat, Vec2, Vec3};
 use gltf::Glb;
-use input::Mouse;
+use input::{Keyboard, Mouse};
 use mesh::{Mesh, Vertex};
+use player::Player;
 use system::{System, Systems};
 use wgpu::util::DeviceExt;
 use winit::application::ApplicationHandler;
@@ -281,57 +286,6 @@ impl<'a> BindGroupBuilder<'a> {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
-struct Camera {
-    centre: Vec3,
-    distance: f32,
-    angle: f32,
-    pitch: f32,
-}
-
-static CAMERA: Mutex<Camera> = Mutex::new(Camera {
-    centre: Vec3::ZERO,
-    distance: 250.0,
-    angle: 0.0,
-    pitch: 0.0,
-});
-
-impl Camera {
-    pub fn get() -> Camera {
-        *CAMERA.lock().unwrap()
-    }
-
-    pub fn update<F: FnOnce(&mut Camera)>(f: F) {
-        let Ok(mut camera) = CAMERA.lock() else {
-            return;
-        };
-        f(&mut camera);
-
-        camera.pitch = camera.pitch.clamp(0.0, std::f32::consts::FRAC_PI_2 - 0.01); 
-    }
-
-    pub fn matrix(&self) -> Mat4 {
-        let rotation = Quat::from_euler(glam::EulerRot::YZX, 0.0, -self.angle, self.pitch);
-        let eye = self.centre + rotation * Vec3::Y * self.distance;
-
-        Mat4::look_at_rh(eye, self.centre, Vec3::Z)
-    }
-}
-
-impl System for Camera {
-    fn on_frame_end() {
-        let mouse = Mouse::get();
-        if !mouse.left_down || mouse.delta == Vec2::ZERO {
-            return;
-        }
-
-        Self::update(|camera| {
-            camera.angle += Mouse::get().delta.x * 0.005;
-            camera.pitch += Mouse::get().delta.y * 0.005;
-        });
-    }
-}
-
 impl Renderer<'_> {
     pub async fn new(window: Arc<Window>) -> Result<Self> {
         let ctx = Context::new(window.clone()).await?;
@@ -489,7 +443,7 @@ impl Renderer<'_> {
             size.width.max(1) as f32 / size.height.max(1) as f32,
             0.1,
         );
-        let view = Camera::get().matrix();
+        let view = Camera::get_matrix();
         self.view_buffer.update(&(projection * view));
 
         let bind_group = self
@@ -553,7 +507,6 @@ impl Renderer<'_> {
 struct App<'a> {
     renderer: Option<Renderer<'a>>,
     window: Option<Arc<Window>>,
-    scene: Vec<Mesh>,
     systems: Systems,
 }
 
@@ -566,15 +519,11 @@ impl ApplicationHandler for App<'_> {
         );
         self.renderer = pollster::block_on(Renderer::new(window.clone())).ok();
         self.window = Some(window);
-        let cube = Glb::load(include_bytes!("../assets/Box.glb")).unwrap();
-        let duck = Glb::load(include_bytes!("../assets/Duck.glb")).unwrap();
-        self.scene = [Mesh::from_glb(&cube), Mesh::from_glb(&duck)]
-            .into_iter()
-            .flatten()
-            .collect();
 
         self.systems.register::<Camera>();
         self.systems.register::<Mouse>();
+        self.systems.register::<Keyboard>();
+        self.systems.register::<Player>();
     }
 
     fn window_event(&mut self, event_loop: &ActiveEventLoop, _id: WindowId, event: WindowEvent) {
@@ -593,15 +542,18 @@ impl ApplicationHandler for App<'_> {
                 event_loop.exit();
             }
             WindowEvent::RedrawRequested => {
+                let start = Instant::now();
                 let frame = self
                     .renderer
                     .as_ref()
                     .unwrap()
-                    .draw(self.window.as_ref().unwrap(), &self.scene);
+                    .draw(self.window.as_ref().unwrap(), &[Player::draw()]);
                 self.window.as_mut().unwrap().pre_present_notify();
                 frame.present();
 
                 self.systems.on_frame_end();
+                println!("{:.3} fps", 1.0 / (Instant::now() - start).as_secs_f32());
+
                 self.window.as_ref().unwrap().request_redraw();
             }
             _ => (),

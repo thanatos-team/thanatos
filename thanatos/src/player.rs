@@ -1,14 +1,10 @@
-use std::{
-    cell::LazyCell,
-    rc::Rc,
-    sync::{Arc, LazyLock, Mutex},
-};
+use std::sync::{LazyLock, Mutex};
 
-use glam::{Mat4, Quat, Vec3};
+use glam::{Mat4, Vec3};
 use gltf::Glb;
 use winit::keyboard::KeyCode;
 
-use crate::{camera::Camera, input::Keyboard, mesh::Mesh, system::System};
+use crate::{camera::Camera, input::Keyboard, mesh::Mesh, scene::Scene, system::System};
 
 pub struct Player {
     position: Vec3,
@@ -36,14 +32,6 @@ impl Player {
     pub fn position() -> Vec3 {
         Self::get(|player| player.position)
     }
-
-    pub fn draw() -> Mesh {
-        Self::get(|player| {
-            let mut mesh = player.mesh.clone();
-            mesh.info.transform = mesh.info.transform * Mat4::from_translation(player.position);
-            mesh
-        })
-    }
 }
 
 impl System for Player {
@@ -64,7 +52,14 @@ impl System for Player {
         }
 
         delta = Camera::rotation() * delta;
+
         Self::update(|player| player.position += delta);
         Camera::set_centre(Player::position());
+    }
+
+    fn draw(scene: &mut Scene) {
+        Self::get(|player| {
+            scene.add(&player.mesh, Mat4::from_translation(player.position));
+        });
     }
 }

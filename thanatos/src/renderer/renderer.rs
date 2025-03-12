@@ -5,23 +5,19 @@ use bytemuck::{Pod, Zeroable};
 use glam::Mat4;
 use winit::window::Window;
 
-use crate::{camera::Camera, mesh::{Mesh, Vertex}};
+use crate::{
+    camera::Camera,
+    mesh::{Mesh, Vertex, VertexData},
+    scene::Scene,
+};
 
 use super::{context::Context, utils::Buffer};
-
 
 pub struct Renderer<'a> {
     ctx: Context<'a>,
     bind_group_layout: wgpu::BindGroupLayout,
     render_pipeline: wgpu::RenderPipeline,
     view_buffer: Buffer<Mat4>,
-}
-
-#[repr(C)]
-#[derive(Clone, Copy, Pod, Zeroable)]
-struct VertexData {
-    vertex: Vertex,
-    mesh_index: u32,
 }
 
 impl Renderer<'_> {
@@ -137,43 +133,16 @@ impl Renderer<'_> {
         self.ctx.resize(width, height);
     }
 
-    pub fn draw(&self, window: &Window, scene: &[Mesh]) -> wgpu::SurfaceTexture {
-        let (vertices, indices) = scene.iter().enumerate().fold(
-            (Vec::new(), Vec::new()),
-            |(mut vertices, mut indices), (mesh_index, mesh)| {
-                indices.extend_from_slice(
-                    &mesh
-                        .indices
-                        .iter()
-                        .map(|index| index + vertices.len() as u32)
-                        .collect::<Vec<_>>(),
-                );
-                vertices.extend_from_slice(
-                    &mesh
-                        .vertices
-                        .clone()
-                        .into_iter()
-                        .map(|vertex| VertexData {
-                            vertex,
-                            mesh_index: mesh_index as u32,
-                        })
-                        .collect::<Vec<_>>(),
-                );
-                (vertices, indices)
-            },
-        );
-
-        let meshes = scene.iter().map(|mesh| mesh.info).collect::<Vec<_>>();
-
+    pub fn draw(&self, window: &Window, scene: Scene) -> wgpu::SurfaceTexture {
         let vertex_buffer =
             self.ctx
-                .create_array_buffer(&vertices, "vertices", wgpu::BufferUsages::VERTEX);
+                .create_array_buffer(&scene.vertices, "vertices", wgpu::BufferUsages::VERTEX);
         let index_buffer =
             self.ctx
-                .create_array_buffer(&indices, "indices", wgpu::BufferUsages::INDEX);
+                .create_array_buffer(&scene.indices, "indices", wgpu::BufferUsages::INDEX);
         let mesh_buffer =
             self.ctx
-                .create_array_buffer(&meshes, "meshes", wgpu::BufferUsages::STORAGE);
+                .create_array_buffer(&scene.infos, "meshes", wgpu::BufferUsages::STORAGE);
 
         let size = window.inner_size();
         let projection = Mat4::perspective_infinite_rh(
@@ -233,7 +202,7 @@ impl Renderer<'_> {
             rpass.set_index_buffer(index_buffer.inner.slice(..), wgpu::IndexFormat::Uint32);
             rpass.set_vertex_buffer(0, vertex_buffer.inner.slice(..));
             rpass.set_bind_group(0, &bind_group, &[]);
-            rpass.draw_indexed(0..indices.len() as u32, 0, 0..1);
+            rpass.draw_indexed(0..scene.indices.len() as u32, 0, 0..1);
         }
 
         self.ctx.queue.submit(Some(encoder.finish()));

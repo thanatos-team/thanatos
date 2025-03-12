@@ -6,9 +6,10 @@ mod input;
 mod mesh;
 mod player;
 mod renderer;
+mod scene;
 mod system;
 
-use std::sync::Arc;
+use std::sync::{Arc, LazyLock};
 use std::time::Instant;
 
 use anyhow::Result;
@@ -67,7 +68,7 @@ impl ApplicationHandler for App<'_> {
                     .renderer
                     .as_ref()
                     .unwrap()
-                    .draw(self.window.as_ref().unwrap(), &[Player::draw()]);
+                    .draw(self.window.as_ref().unwrap(), self.systems.draw());
                 self.window.as_mut().unwrap().pre_present_notify();
                 frame.present();
 

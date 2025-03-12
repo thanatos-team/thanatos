@@ -3,7 +3,7 @@ use glam::{Mat4, Vec3, Vec4};
 use gltf::{Glb, MeshPrimitive};
 
 #[repr(C)]
-#[derive(Clone, Copy, Pod, Zeroable)]
+#[derive(Clone, Copy, Debug, Pod, Zeroable)]
 pub struct Vertex {
     position: [f32; 3],
     normal: [f32; 3],
@@ -19,7 +19,14 @@ impl Vertex {
 }
 
 #[repr(C)]
-#[derive(Clone, Copy, Pod, Zeroable, Default)]
+#[derive(Clone, Copy, Debug, Pod, Zeroable)]
+pub struct VertexData {
+    pub vertex: Vertex,
+    pub mesh_index: u32,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Pod, Debug, Zeroable, Default)]
 pub struct MeshInfo {
     pub transform: Mat4,
     pub colour: Vec4,

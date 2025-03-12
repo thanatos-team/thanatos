@@ -1,0 +1,9 @@
+[package]
+name = "arbiter"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+bytemuck = { version = "1.22.0", features = ["const_zeroed", "derive", "must_cast"] }
+glam = { version = "0.30.0", features = ["bytemuck"] }
+rustix = { version = "1.0.2", features = ["fs", "mm"] }

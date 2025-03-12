@@ -14,7 +14,7 @@ pub struct Camera {
 
 static CAMERA: Mutex<Camera> = Mutex::new(Camera {
     centre: Vec3::ZERO,
-    distance: 250.0,
+    distance: 10.0,
     angle: 0.0,
     pitch: 0.0,
 });

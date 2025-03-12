@@ -30,5 +30,5 @@ fn vs_main(@location(0) position: vec3<f32>, @location(1) normal: vec3<f32>, @lo
 
 @fragment
 fn fs_main(vertex: VertexOutput) -> @location(0) vec4<f32> {
-    return vertex.colour * dot(vertex.normal, vec3<f32>(1.0));
+    return vertex.colour * dot(vertex.normal, normalize(vec3<f32>(0.2, 0.4, 0.6)));
 }

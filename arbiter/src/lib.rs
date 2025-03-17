@@ -12,6 +12,7 @@ use std::{
 };
 
 use bytemuck::{Pod, Zeroable};
+use glam::Vec3;
 use rustix::mm::{MapFlags, MsyncFlags, ProtFlags};
 
 pub struct Blocks {
@@ -56,12 +57,12 @@ impl Blocks {
         Ok(blocks)
     }
 
-    pub fn get(&self, range: Range<usize>) -> &[u8] {
+    pub fn get<'a>(&'a self, range: Range<usize>) -> &'a [u8] {
         assert!(self.capacity >= range.end);
         &self.map[range]
     }
 
-    pub fn get_mut(&mut self, range: Range<usize>) -> &mut [u8] {
+    pub fn get_mut<'a>(&'a mut self, range: Range<usize>) -> &'a mut [u8] {
         assert!(self.capacity >= range.end);
 
         let start_block = range.start / Self::BLOCK_SIZE;
@@ -280,13 +281,13 @@ pub struct Column<T: Pod + Zeroable> {
 }
 
 impl<T: Pod + Zeroable> Column<T> {
-    pub fn new(data: &Path, history: &Path) -> Result<Self> {
-        let data = Mapping::new(data)?;
+    pub fn new<D: AsRef<Path>, H: AsRef<Path>>(data: D, history: H) -> Result<Self> {
+        let data = Mapping::new(data.as_ref())?;
         let history = OpenOptions::new()
             .create(true)
             .read(true)
             .append(true)
-            .open(history)?;
+            .open(history.as_ref())?;
 
         Ok(Self {
             data,
@@ -295,16 +296,12 @@ impl<T: Pod + Zeroable> Column<T> {
         })
     }
 
-    pub fn get(&mut self, range: Range<usize>) -> &[T] {
+    pub fn get(&self, range: Range<usize>) -> &[T] {
         self.data.get(range)
     }
 
-    pub fn set(&mut self, start: usize, values: &[T]) -> Result<()> {
-        let end = start + values.len();
-
-        self.data.get_mut(start..end).copy_from_slice(values);
-
-        Ok(())
+    pub fn get_mut(&mut self, range: Range<usize>) -> &mut [T] {
+        self.data.get_mut(range)
     }
 
     pub fn append(&mut self, values: &[T]) -> Result<Range<usize>> {
@@ -313,11 +310,9 @@ impl<T: Pod + Zeroable> Column<T> {
         Ok(start..start + values.len())
     }
 
-    pub fn remove(&mut self, range: Range<usize>) -> Result<()> {
-        self.set(
-            range.start,
-            &vec![bytemuck::zeroed(); range.end - range.start],
-        )
+    pub fn remove(&mut self, range: Range<usize>) {
+        self.get_mut(range.clone())
+            .copy_from_slice(&vec![bytemuck::zeroed(); range.end - range.start])
     }
 
     pub fn len(&self) -> usize {
@@ -367,3 +362,119 @@ impl<T: Pod + Zeroable> Column<T> {
         Ok(())
     }
 }
+
+#[repr(C)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Pod, Zeroable, Debug)]
+pub struct Generation(usize);
+
+impl Generation {
+    pub fn is_dead(&self) -> bool {
+        self.0 % 2 == 0
+    }
+
+    pub fn advance(&mut self) {
+        self.0 += 1
+    }
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Pod, Zeroable, Debug)]
+pub struct GenerationalIndex {
+    generation: Generation,
+    index: usize,
+}
+
+impl GenerationalIndex {
+    pub fn is_dead(&self) -> bool {
+        self.generation.is_dead()
+    }
+}
+macro_rules! table {
+    (struct $name:ident { $($row:ident: $ty:ty),* $(,)? }) => {
+        pub struct $name {
+            free: Vec<usize>,
+            generations: Column<Generation>,
+            $($row: Column<$ty>,)*
+        }
+
+        impl $name {
+            pub fn new() -> Result<Self> {
+                let generations = Column::<Generation>::new(
+                    format!("{}.generations", std::stringify!($name)),
+                    format!("{}.generations.history", std::stringify!($name)))?;
+                $(let $row = Column::<$ty>::new(
+                    format!("{}.{}", std::stringify!($name), std::stringify!($row)),
+                    format!("{}.{}.history", std::stringify!($name), std::stringify!($row)))?;)*
+
+                Ok(Self {
+                    free: generations
+                        .get(0..generations.len())
+                        .iter()
+                        .enumerate()
+                        .filter(|(_, generation)| generation.is_dead())
+                        .map(|(i, _)| i)
+                        .collect(),
+                    generations,
+                    $($row,)*
+                })
+            }
+
+            pub fn insert(
+                &mut self,
+                $($row: $ty),*
+            ) -> Result<GenerationalIndex> {
+                if let Some(index) = self.free.pop() {
+                    let generation = &mut self.generations.get_mut(index..index + 1)[0];
+                    generation.advance();
+
+                    $(self.$row.get_mut(index..index + 1)[0] = $row;)*
+
+                    Ok(GenerationalIndex {
+                        generation: *generation,
+                        index,
+                    })
+                } else {
+                    let generation = Generation(1);
+                    self.generations.append(&[generation])?;
+
+                    $(self.$row.append(&[$row])?;)*
+
+                    Ok(GenerationalIndex {
+                        generation,
+                        index: self.generations.len() - 1,
+                    })
+                }
+            }
+
+            pub fn remove(&mut self, index: GenerationalIndex) {
+                assert!(!index.generation.is_dead());
+                let generation = &mut self.generations.get_mut(index.index..index.index + 1)[0];
+                assert_eq!(index.generation, *generation);
+                self.free.push(index.index);
+                generation.advance();
+            }
+
+            pub fn len(&self) -> usize {
+                self.generations.len()
+            }
+
+            $(pub fn $row(&self) -> &[$ty] {
+                self.$row.get(0..self.len())
+            })*
+
+            $(concat_idents::concat_idents!(name = $row, _mut {
+                pub fn name(&mut self) -> &mut [$ty] {
+                    self.$row.get_mut(0..self.len())
+                }
+            });)*
+        }
+    };
+}
+
+table!(
+    struct Players {
+        positions: Vec3,
+        directions: Vec3,
+        speeds: f32,
+    }
+);

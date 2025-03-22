@@ -41,7 +41,7 @@ impl Mouse {
         f(&MOUSE.lock().unwrap())
     }
 
-    fn get_mut<F: FnOnce(&mut Mouse)>(f: F) {
+    fn update<F: FnOnce(&mut Mouse)>(f: F) {
         let Ok(mut mouse) = MOUSE.lock() else { return };
         f(&mut mouse)
     }
@@ -50,7 +50,7 @@ impl Mouse {
 impl System for Mouse {
     fn on_window_event(event: &winit::event::WindowEvent) {
         match event {
-            winit::event::WindowEvent::CursorMoved { position, .. } => Self::get_mut(|mouse| {
+            winit::event::WindowEvent::CursorMoved { position, .. } => Self::update(|mouse| {
                 let position = Vec2::new(position.x as f32, position.y as f32);
                 mouse.delta += position - mouse.position;
                 mouse.position = position;
@@ -60,7 +60,7 @@ impl System for Mouse {
                 button,
                 ..
             } => {
-                Self::get_mut(|mouse| {
+                Self::update(|mouse| {
                     mouse.down.insert(*button);
                 });
             }
@@ -69,7 +69,7 @@ impl System for Mouse {
                 button,
                 ..
             } => {
-                Self::get_mut(|mouse| {
+                Self::update(|mouse| {
                     mouse.down.remove(button);
                 });
             }
@@ -78,7 +78,7 @@ impl System for Mouse {
     }
 
     fn on_frame_end() {
-        Self::get_mut(|mouse| mouse.delta = Vec2::ZERO);
+        Self::update(|mouse| mouse.delta = Vec2::ZERO);
     }
 }
 
@@ -98,7 +98,7 @@ impl Keyboard {
         f(&KEYBOARD.lock().unwrap())
     }
 
-    fn get_mut<F: FnOnce(&mut Self)>(f: F) {
+    fn update<F: FnOnce(&mut Self)>(f: F) {
         f(&mut KEYBOARD.lock().unwrap())
     }
 
@@ -123,7 +123,7 @@ impl System for Keyboard {
                     },
                 ..
             } => {
-                Self::get_mut(|keyboard| {
+                Self::update(|keyboard| {
                     keyboard.pressed.insert(*code);
                     keyboard.down.insert(*code);
                 });
@@ -137,7 +137,7 @@ impl System for Keyboard {
                     },
                 ..
             } => {
-                Self::get_mut(|keyboard| {
+                Self::update(|keyboard| {
                     keyboard.pressed.remove(code);
                     keyboard.down.remove(code);
                 });
@@ -147,6 +147,6 @@ impl System for Keyboard {
     }
 
     fn on_frame_end() {
-        Self::get_mut(|keyboard| keyboard.pressed.clear());
+        Self::update(|keyboard| keyboard.pressed.clear());
     }
 }

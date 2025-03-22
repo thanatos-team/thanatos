@@ -4,10 +4,13 @@ use glam::{Mat4, Vec3};
 use gltf::Glb;
 use winit::keyboard::KeyCode;
 
-use crate::{camera::Camera, input::Keyboard, mesh::Mesh, scene::Scene, system::System};
+use crate::{
+    camera::Camera, input::Keyboard, mesh::Mesh, scene::Scene, system::System, world::World,
+};
 
 pub struct Player {
     position: Vec3,
+    direction: Vec3,
     mesh: Mesh,
 }
 
@@ -16,6 +19,7 @@ static PLAYER: LazyLock<Mutex<Player>> = LazyLock::new(|| {
     let mesh = Mesh::from_glb(&glb).into_iter().next().unwrap();
     Mutex::new(Player {
         position: Vec3::ZERO,
+        direction: Vec3::ZERO,
         mesh,
     })
 });
@@ -51,15 +55,25 @@ impl System for Player {
             delta += Vec3::NEG_X;
         }
 
-        delta = Camera::rotation() * delta;
-
-        Self::update(|player| player.position += delta);
-        Camera::set_centre(Player::position());
+        Self::update(|player| player.direction = (Camera::rotation() * delta).normalize_or_zero());
     }
 
     fn draw(scene: &mut Scene) {
+        println!("{}", Self::position());
         Self::get(|player| {
             scene.add(&player.mesh, Mat4::from_translation(player.position));
         });
+    }
+
+    fn on_world_update() {
+        Self::update(|player| {
+            player.position = World::players()
+                .positions
+                .get(0)
+                .copied()
+                .unwrap_or_default();
+        });
+
+        Camera::set_centre(Self::position());
     }
 }

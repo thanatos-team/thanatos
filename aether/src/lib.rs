@@ -8,7 +8,7 @@ pub struct Tick(usize);
 
 impl Tick {
     pub const ZERO: Self = Self(0);
-    
+
     pub fn next(self) -> Self {
         Self(self.0 + 1)
     }
@@ -23,22 +23,40 @@ impl Generation {
     pub fn next(self) -> Self {
         Self(self.0 + 1)
     }
+
+    pub fn is_dead(&self) -> bool {
+        self.0 % 2 == 0
+    }
 }
 
-#[derive(Encode, Decode, Clone, Debug, Default)]
+#[derive(Encode, Decode, Clone, Copy, Debug, PartialEq, Eq)]
+pub struct GenerationalIndex {
+    pub generation: Generation,
+    pub index: usize,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct Player {
+    pub position: Vec3,
+    pub direction: Vec3
+}
+
+#[derive(Encode, Decode, Debug, Default)]
 pub struct Players {
-    pub generations: Arc<[Generation]>,
-    pub positions: Arc<[Vec3]>,
-    pub directions: Arc<[Vec3]>,
+    pub generations: Box<[Generation]>,
+    pub positions: Box<[Vec3]>,
+    pub directions: Box<[Vec3]>,
 }
 
-#[derive(Encode, Decode, Clone, Debug, Default)]
+#[derive(Encode, Decode, Debug, Default)]
 pub struct World {
     pub tick: Tick,
     pub players: Players,
 }
 
+
 #[derive(Encode, Decode, Debug)]
-pub struct ClientboundMessage {
-    pub world: World,
+pub enum ClientboundMessage {
+    Update(Arc<World>),
+    SetPlayer(GenerationalIndex),
 }

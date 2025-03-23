@@ -59,7 +59,6 @@ impl System for Player {
     }
 
     fn draw(scene: &mut Scene) {
-        println!("{}", Self::position());
         Self::get(|player| {
             scene.add(&player.mesh, Mat4::from_translation(player.position));
         });
@@ -67,13 +66,23 @@ impl System for Player {
 
     fn on_world_update() {
         Self::update(|player| {
-            player.position = World::players()
-                .positions
-                .get(0)
-                .copied()
-                .unwrap_or_default();
+            player.position = World::me().map(|me| me.position).unwrap_or(player.position)
         });
 
         Camera::set_centre(Self::position());
+    }
+}
+
+pub struct OtherPlayers;
+
+impl System for OtherPlayers {
+    fn draw(scene: &mut Scene) {
+        Player::get(|player| {
+            World::current()
+                .players
+                .positions
+                .iter()
+                .for_each(|position| scene.add(&player.mesh, Mat4::from_translation(*position)))
+        })
     }
 }

@@ -13,17 +13,17 @@ mod world;
 use std::sync::{Arc, LazyLock};
 use std::time::Instant;
 
-use aether::ClientboundMessage;
+use aether::{ClientboundMessage, GenerationalIndex};
 use anyhow::Result;
 use camera::Camera;
 use input::{Keyboard, Mouse};
-use player::Player;
+use player::{OtherPlayers, Player};
 use renderer::Renderer;
 use system::Systems;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 use tokio::net::tcp::OwnedReadHalf;
-use tokio::sync::watch;
+use tokio::sync::{oneshot, watch};
 use winit::application::ApplicationHandler;
 use winit::error::EventLoopError;
 use winit::event::WindowEvent;
@@ -51,7 +51,8 @@ impl ApplicationHandler for App<'_> {
         Systems::register::<Mouse>();
         Systems::register::<Keyboard>();
         Systems::register::<Player>();
-        Systems::register::<World>()
+        Systems::register::<World>();
+        Systems::register::<OtherPlayers>();
     }
 
     fn window_event(&mut self, event_loop: &ActiveEventLoop, _id: WindowId, event: WindowEvent) {
@@ -89,32 +90,25 @@ impl ApplicationHandler for App<'_> {
     }
 }
 
-async fn handle_read(
-    mut reader: OwnedReadHalf,
-    sender: watch::Sender<aether::World>,
-) -> Result<()> {
+async fn handle_read(mut reader: OwnedReadHalf) -> Result<()> {
     loop {
         let length = reader.read_u64().await? as usize;
         let mut buf = vec![0_u8; length];
         reader.read_exact(&mut buf).await?;
-        let message = bitcode::decode::<ClientboundMessage>(&buf)?;
-
-        sender.send_replace(message.world);
+        match bitcode::decode::<ClientboundMessage>(&buf)? {
+            ClientboundMessage::Update(world) => World::set_world(world),
+            ClientboundMessage::SetPlayer(me) => World::set_me(me),
+        }
     }
 }
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    for _ in 0..1_000 {
-        let stream = TcpStream::connect("localhost:3000").await?;
-        let (reader, mut writer) = stream.into_split();
-        writer.write_u64(13).await?;
+    let stream = TcpStream::connect("localhost:3000").await?;
+    let (reader, mut writer) = stream.into_split();
+    writer.write_u64(13).await?;
 
-        let (sender, receiver) = watch::channel(aether::World::default());
-        World::set_receiver(receiver);
-
-        tokio::spawn(handle_read(reader, sender));
-    }
+    tokio::spawn(handle_read(reader));
 
     let event_loop = EventLoop::new().unwrap();
 

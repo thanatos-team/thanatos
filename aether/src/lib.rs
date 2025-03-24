@@ -37,6 +37,7 @@ pub struct GenerationalIndex {
 
 #[derive(Clone, Copy, Debug)]
 pub struct Player {
+    pub index: GenerationalIndex,
     pub position: Vec3,
     pub direction: Vec3
 }
@@ -60,3 +61,11 @@ pub enum ClientboundMessage {
     Update(Arc<World>),
     SetPlayer(GenerationalIndex),
 }
+
+#[derive(Encode, Decode, Debug)]
+pub enum ServerboundMessage {
+    SetDirection(Vec3)
+}
+
+pub const PLAYER_SPEED: f32 = 15.0;
+pub const ALLOWED_POSITION_DIFFERENCE: f32 = 50.0;

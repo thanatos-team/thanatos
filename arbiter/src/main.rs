@@ -1,6 +1,9 @@
 mod world;
 
-use aether::{ClientboundMessage, Generation, GenerationalIndex, Players, Tick};
+use aether::{
+    ClientboundMessage, Generation, GenerationalIndex, PLAYER_SPEED, Players, ServerboundMessage,
+    Tick,
+};
 use futures::Stream;
 use glam::Vec3;
 use log::{debug, error, info};
@@ -32,15 +35,27 @@ use tokio_stream::{
 use world::World;
 
 trait Actor<M: Debug + Send + 'static, E: Debug> {
-    fn setup(&mut self) -> impl Future<Output = Result<(), E>> + Send {
+    fn init(&mut self) -> impl Future<Output = Result<(), E>> + Send {
         async { Ok(()) }
     }
 
     fn handle(&mut self, message: M) -> impl Future<Output = Result<(), E>> + Send;
+
+    fn deinit(&mut self) -> impl Future<Output = ()> + Send {
+        async {}
+    }
 }
 
 trait System<E: Debug> {
+    fn init(&mut self) -> impl Future<Output = Result<(), E>> + Send {
+        async { Ok(()) }
+    }
+
     fn run(&mut self) -> impl Future<Output = Result<(), E>> + Send;
+
+    fn deinit(&mut self) -> impl Future<Output = ()> + Send {
+        async {}
+    }
 }
 
 fn spawn_actor_with<M: Debug + Send + 'static, E: Debug>(
@@ -53,7 +68,7 @@ fn spawn_actor_with<M: Debug + Send + 'static, E: Debug>(
     tokio::spawn(async move {
         info!("[{name}] started");
 
-        if let Err(e) = actor.setup().await {
+        if let Err(e) = actor.init().await {
             error!("[{name}] failed due to `{e:?}`");
             return;
         }
@@ -62,9 +77,11 @@ fn spawn_actor_with<M: Debug + Send + 'static, E: Debug>(
             debug!("[{name}] recieved: {message:#?}");
             if let Err(e) = actor.handle(message).await {
                 error!("[{name}] failed due to `{e:?}`");
-                return;
+                break;
             }
         }
+
+        actor.deinit().await;
 
         info!("[{name}] finished");
     });
@@ -87,26 +104,59 @@ fn spawn_system<E: Debug>(name: impl ToString, mut system: impl System<E> + Send
     tokio::spawn(async move {
         info!("[{name}] started");
 
+        if let Err(e) = system.init().await {
+            error!("[{name}] failed due to `{e:?}`");
+            return;
+        }
+
         loop {
             if let Err(e) = system.run().await {
                 error!("[{name}] failed due to `{e:?}`");
-                return;
+                break;
             }
         }
+
+        system.deinit().await;
+
+        info!("[{name}] finished");
     });
 }
 
 pub struct ConnectionReader {
     player: GenerationalIndex,
+    world: Arc<World>,
     reader: OwnedReadHalf,
 }
 
 impl System<std::io::Error> for ConnectionReader {
     async fn run(&mut self) -> Result<(), std::io::Error> {
-        let length = self.reader.read_u64().await?;
-        println!("{:?} {length:?}", self.player.index);
+        let length = self.reader.read_u64().await? as usize;
+        let mut buf = vec![0_u8; length];
+        self.reader.read_exact(&mut buf).await?;
+
+        let Ok(message) = bitcode::decode::<ServerboundMessage>(&buf) else {
+            return Ok(());
+        };
+
+        match message {
+            ServerboundMessage::SetDirection(direction) => {
+                if let Some(d) = self
+                    .world
+                    .players
+                    .directions_mut()
+                    .await
+                    .get_mut(self.player.index)
+                {
+                    *d = direction
+                }
+            }
+        }
 
         Ok(())
+    }
+
+    async fn deinit(&mut self) {
+        self.world.players.remove(self.player).await;
     }
 }
 
@@ -131,7 +181,7 @@ impl ConnectionWriter {
 }
 
 impl Actor<ConnectionWriterMessage, std::io::Error> for ConnectionWriter {
-    async fn setup(&mut self) -> Result<(), std::io::Error> {
+    async fn init(&mut self) -> Result<(), std::io::Error> {
         self.send(&ClientboundMessage::SetPlayer(self.player))
             .await?;
 
@@ -179,11 +229,15 @@ impl System<std::io::Error> for TcpListener {
         println!("{addr:?} connected");
         let (reader, writer) = stream.into_split();
 
-        let player = self.world.players.insert(Vec3::ZERO, Vec3::ONE * 0.01).await;
+        let player = self.world.players.insert(Vec3::ZERO, Vec3::ZERO).await;
 
         spawn_system(
             format!("{:?} Reader", player.index),
-            ConnectionReader { player, reader },
+            ConnectionReader {
+                player,
+                reader,
+                world: self.world.clone(),
+            },
         );
 
         spawn_actor_with(
@@ -203,10 +257,16 @@ async fn update_positions(world: &World) {
         .await
         .iter_mut()
         .zip(world.players.directions().await.iter())
-        .for_each(|(position, direction)| *position += *direction)
+        .for_each(|(position, direction)| {
+            *position += *direction * PLAYER_SPEED * delta().as_secs_f32()
+        })
 }
 
 const TPS: f32 = 20.0;
+
+fn delta() -> Duration {
+    Duration::from_secs_f32(1.0 / TPS)
+}
 
 #[tokio::main]
 async fn main() -> std::io::Result<()> {

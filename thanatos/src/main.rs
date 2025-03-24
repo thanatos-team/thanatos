@@ -8,22 +8,24 @@ mod player;
 mod renderer;
 mod scene;
 mod system;
+mod time;
 mod world;
 
 use std::sync::{Arc, LazyLock};
 use std::time::Instant;
 
-use aether::{ClientboundMessage, GenerationalIndex};
+use aether::{ClientboundMessage, GenerationalIndex, ServerboundMessage};
 use anyhow::Result;
 use camera::Camera;
 use input::{Keyboard, Mouse};
 use player::{OtherPlayers, Player};
 use renderer::Renderer;
 use system::Systems;
+use time::Clock;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
-use tokio::net::tcp::OwnedReadHalf;
-use tokio::sync::{oneshot, watch};
+use tokio::net::tcp::{OwnedReadHalf, OwnedWriteHalf};
+use tokio::sync::{mpsc, oneshot, watch};
 use winit::application::ApplicationHandler;
 use winit::error::EventLoopError;
 use winit::event::WindowEvent;
@@ -53,6 +55,7 @@ impl ApplicationHandler for App<'_> {
         Systems::register::<Player>();
         Systems::register::<World>();
         Systems::register::<OtherPlayers>();
+        Systems::register::<Clock>();
     }
 
     fn window_event(&mut self, event_loop: &ActiveEventLoop, _id: WindowId, event: WindowEvent) {
@@ -102,13 +105,28 @@ async fn handle_read(mut reader: OwnedReadHalf) -> Result<()> {
     }
 }
 
+async fn handle_write(mut writer: OwnedWriteHalf) -> Result<()> {
+    let (sender, mut receiver) = mpsc::unbounded_channel();
+
+    World::set_sender(sender);
+
+    while let Some(message) = receiver.recv().await {
+        let buf = bitcode::encode(&message);
+        writer.write_u64(buf.len() as u64).await?;
+        writer.write_all(&buf).await?;
+    }
+
+    Ok(())
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
-    let stream = TcpStream::connect("localhost:3000").await?;
-    let (reader, mut writer) = stream.into_split();
-    writer.write_u64(13).await?;
+    env_logger::init();
 
+    let stream = TcpStream::connect("localhost:3000").await?;
+    let (reader, writer) = stream.into_split();
     tokio::spawn(handle_read(reader));
+    tokio::spawn(handle_write(writer));
 
     let event_loop = EventLoop::new().unwrap();
 

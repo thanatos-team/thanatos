@@ -1,6 +1,8 @@
 use std::sync::{Arc, LazyLock, Mutex};
 
-use aether::{GenerationalIndex, Player};
+use aether::{GenerationalIndex, Player, ServerboundMessage};
+use anyhow::Result;
+use tokio::sync::mpsc;
 
 use crate::system::{System, Systems};
 
@@ -9,6 +11,7 @@ pub struct World {
     changed: bool,
     current: Arc<aether::World>,
     me: Option<GenerationalIndex>,
+    sender: Option<mpsc::UnboundedSender<ServerboundMessage>>,
 }
 
 static WORLD: LazyLock<Mutex<World>> = LazyLock::new(|| Mutex::new(World::default()));
@@ -34,6 +37,7 @@ impl World {
                 let direction = *world.current.players.directions.get(me.index)?;
 
                 Some(Player {
+                    index: me,
                     position,
                     direction,
                 })
@@ -55,11 +59,26 @@ impl World {
     pub fn set_me(new: GenerationalIndex) {
         Self::update(|world| world.me = Some(new));
     }
+
+    pub fn set_sender(sender: mpsc::UnboundedSender<ServerboundMessage>) {
+        Self::update(|world| world.sender = Some(sender));
+    }
+
+    pub fn send(message: ServerboundMessage) -> Result<()> {
+        Self::get(|world| {
+            if let Some(sender) = &world.sender {
+                sender.send(message)?
+            }
+
+            Ok(())
+        })
+    }
 }
 
 impl System for World {
     fn on_frame_end() {
         if Self::get(|world| world.changed) {
+            Self::update(|world| world.changed = false);
             Systems::on_world_update();
         }
     }

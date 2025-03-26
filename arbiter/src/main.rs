@@ -192,7 +192,7 @@ impl Actor<ConnectionWriterMessage, std::io::Error> for ConnectionWriter {
         match message {
             ConnectionWriterMessage::Publish(world) => {
                 debug!("Updating {:?}", self.player.index);
-                self.send(&ClientboundMessage::Update(world)).await?;
+                self.send(&ClientboundMessage::Update(world)).await.unwrap();
             }
         }
 

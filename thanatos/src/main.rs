@@ -17,6 +17,7 @@ use std::time::Instant;
 use aether::{ClientboundMessage, GenerationalIndex, ServerboundMessage};
 use anyhow::Result;
 use camera::Camera;
+use glam::UVec2;
 use input::{Keyboard, Mouse};
 use player::{OtherPlayers, Player};
 use renderer::Renderer;
@@ -66,7 +67,7 @@ impl ApplicationHandler for App<'_> {
                 self.renderer
                     .as_ref()
                     .unwrap()
-                    .resize(new_size.width.max(1), new_size.height.max(1));
+                    .resize(UVec2::new(new_size.width, new_size.height).max(UVec2::ONE));
                 self.window.as_ref().unwrap().request_redraw();
             }
             WindowEvent::CloseRequested => {

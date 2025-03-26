@@ -2,6 +2,7 @@ use std::{any::type_name, borrow::Cow, marker::PhantomData, sync::Arc};
 
 use anyhow::Result;
 use bytemuck::Pod;
+use glam::UVec2;
 use wgpu::util::DeviceExt;
 use winit::window::Window;
 
@@ -53,28 +54,53 @@ impl<'a> Context<'a> {
         };
 
         let size = window.inner_size();
-        ctx.resize(size.width, size.height);
+        ctx.resize(UVec2::new(size.width, size.height));
         Ok(ctx)
     }
 
-    fn get_size(window: &Window) -> (u32, u32) {
-        let size = window.inner_size();
-        (size.width.max(1), size.height.max(1))
-    }
-
-    pub fn resize(&self, width: u32, height: u32) {
+    pub fn resize(&self, size: UVec2) {
         let config = self
             .surface
-            .get_default_config(&self.adapter, width, height)
+            .get_default_config(&self.adapter, size.x, size.y)
             .unwrap();
         self.surface.configure(&self.device, &config);
     }
 
-    pub fn create_depth_texture(&self, window: &Window) -> wgpu::TextureView {
-        let (width, height) = Self::get_size(window);
+    pub fn get_swapchain_format(&self) -> wgpu::TextureFormat {
+        let swapchain_capabilities = self.surface.get_capabilities(&self.adapter);
+        swapchain_capabilities.formats[0]
+    }
+
+    pub fn create_colour_texture(
+        &self,
+        size: UVec2,
+        format: wgpu::TextureFormat,
+        usage: wgpu::TextureUsages
+    ) -> wgpu::TextureView {
         let size = wgpu::Extent3d {
-            width,
-            height,
+            width: size.x,
+            height: size.y,
+            depth_or_array_layers: 1,
+        };
+
+        let texture = self.device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("colour texture"),
+            size,
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format,
+            usage,
+            view_formats: &[],
+        });
+
+        texture.create_view(&wgpu::TextureViewDescriptor::default())
+    }
+
+    pub fn create_depth_texture(&self, size: UVec2, usage: wgpu::TextureUsages) -> wgpu::TextureView {
+        let size = wgpu::Extent3d {
+            width: size.x,
+            height: size.y,
             depth_or_array_layers: 1,
         };
 
@@ -85,7 +111,7 @@ impl<'a> Context<'a> {
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
             format: wgpu::TextureFormat::Depth32Float,
-            usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+            usage,
             view_formats: &[],
         });
 

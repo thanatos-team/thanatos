@@ -1,7 +1,9 @@
-use std::{marker::PhantomData, ops::{Bound, RangeBounds}};
+use std::{
+    marker::PhantomData,
+    ops::{Bound, RangeBounds},
+};
 
 use bytemuck::Pod;
-
 
 pub struct Buffer<T: Pod> {
     pub inner: wgpu::Buffer,
@@ -85,6 +87,22 @@ impl<'a> BindGroupBuilder<'a> {
         self.entries.push(wgpu::BindGroupEntry {
             binding: self.entries.len() as u32,
             resource: buffer.inner.as_entire_binding(),
+        });
+        self
+    }
+
+    pub fn with_texture_view(mut self, view: &'a wgpu::TextureView) -> Self {
+        self.entries.push(wgpu::BindGroupEntry {
+            binding: self.entries.len() as u32,
+            resource: wgpu::BindingResource::TextureView(&view),
+        });
+        self
+    }
+
+    pub fn with_sampler(mut self, sampler: &'a wgpu::Sampler) -> Self {
+        self.entries.push(wgpu::BindGroupEntry {
+            binding: self.entries.len() as u32,
+            resource: wgpu::BindingResource::Sampler(sampler),
         });
         self
     }

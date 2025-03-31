@@ -216,9 +216,12 @@ impl Renderer<'_> {
             (bind_group_layout, pipeline)
         };
 
-        let light_sampler = ctx
-            .device
-            .create_sampler(&wgpu::SamplerDescriptor::default());
+        let light_sampler = ctx.device.create_sampler(&wgpu::SamplerDescriptor {
+            mag_filter: wgpu::FilterMode::Nearest,
+            min_filter: wgpu::FilterMode::Nearest,
+            mipmap_filter: wgpu::FilterMode::Nearest,
+            ..Default::default()
+        });
 
         let view_buffer = ctx.create_buffer(
             &Mat4::IDENTITY,
@@ -289,13 +292,13 @@ impl Renderer<'_> {
             self.ctx.get_swapchain_format(),
             wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
         );
-        
+
         let normal = self.ctx.create_colour_texture(
             size,
             Self::NORMAL_FORMAT,
             wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
         );
-        
+
         let depth = self.ctx.create_depth_texture(
             size,
             wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,

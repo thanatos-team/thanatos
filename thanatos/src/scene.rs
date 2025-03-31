@@ -30,7 +30,7 @@ impl Scene {
         );
 
         let mut info = mesh.info.clone();
-        info.transform = transform * info.transform;
+        info.set_transform(transform * info.transform());
         self.infos.push(info);
     }
 }

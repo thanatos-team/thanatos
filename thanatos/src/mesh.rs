@@ -1,5 +1,5 @@
 use bytemuck::{Pod, Zeroable};
-use glam::{Mat4, Vec3, Vec4};
+use glam::{Mat3, Mat4, Vec3, Vec4};
 use gltf::{Glb, MeshPrimitive};
 
 #[repr(C)]
@@ -28,8 +28,20 @@ pub struct VertexData {
 #[repr(C)]
 #[derive(Clone, Copy, Pod, Debug, Zeroable, Default)]
 pub struct MeshInfo {
-    pub transform: Mat4,
+    transform: Mat4,
+    normal: Mat4,
     pub colour: Vec4,
+}
+
+impl MeshInfo {
+    pub fn transform(&self) -> Mat4 {
+        self.transform
+    }
+
+    pub fn set_transform(&mut self, transform: Mat4) {
+        self.transform = transform;
+        self.normal = Mat4::from_quat(transform.to_scale_rotation_translation().1);
+    }
 }
 
 #[derive(Clone, Default)]
@@ -64,6 +76,7 @@ impl Mesh {
                 .collect(),
             info: MeshInfo {
                 transform: Mat4::IDENTITY,
+                normal: Mat4::IDENTITY,
                 colour,
             },
         })

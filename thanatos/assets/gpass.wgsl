@@ -1,7 +1,8 @@
 struct VertexOutput {
-    @builtin(position) position: vec4<f32>,
-    @location(0) normal: vec3<f32>,
-    @location(1) colour: vec4<f32>,
+    @location(0) position: vec3<f32>,
+    @location(1) normal: vec3<f32>,
+    @location(2) colour: vec4<f32>,
+    @builtin(position) clip_position: vec4<f32>,
 }
 
 @group(0)
@@ -10,6 +11,7 @@ var<uniform> view_projection_matrix: mat4x4<f32>;
 
 struct MeshInfo {
     transform: mat4x4<f32>,  
+    normal: mat4x4<f32>,
     colour: vec4<f32>,
 }
 
@@ -22,9 +24,11 @@ fn vs_main(@location(0) position: vec3<f32>, @location(1) normal: vec3<f32>, @lo
     var info: MeshInfo = scene[mesh_index]; 
 
     var output: VertexOutput;
-    output.position = view_projection_matrix * info.transform * vec4<f32>(position, 1.0);
-    output.normal = normal;
+    var world_position = info.transform * vec4<f32>(position, 1.0);
+    output.position = world_position.xyz;
+    output.normal = (info.normal * vec4<f32>(normal, 0)).xyz;
     output.colour = info.colour;
+    output.clip_position = view_projection_matrix * world_position;
     return output;
 }
 
